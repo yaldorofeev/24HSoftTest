@@ -11,6 +11,7 @@ type
     prime: Integer;
   end;
 
+// Thraed class that finds primes and writes them to files. The Erathothfen metod was used.
 type
   TPrimeWriter = class(TThread)
   private
@@ -27,8 +28,13 @@ type
 
 var
 n: Integer;
+
+// Critical section for data sharing
 CSGlobeI: TCriticalSection;
+
+// Critical section for "Result" file accsess.
 CSWrite: TCriticalSection;
+
 CommonFile: TextFile;
 WriteThreads: array of TPrimeWriter;
 ThreadsCount: Integer;
@@ -37,9 +43,7 @@ a: array of integer;
 globI: Integer;
 LastWrote: Integer;
 foundCount: Integer;
-Quit: Boolean;
 S: string;
-
 
 procedure TPrimeWriter.Execute;
 var
@@ -53,8 +57,11 @@ begin
   ReWrite(FOwnFile);
   Closefile(FOwnFile);
   FOwnPrimeCount := 0;
+
+  // Windows only feature. Commemt unde other OS. And also comment "windows" in uses.
   QueryPerformanceFrequency(Fr);
   QueryPerformanceCounter(Sta);
+
   while (globI < n  + 1) or (Length(toWrites) > 0) do
     begin
 
@@ -78,10 +85,12 @@ begin
                 end;
               CSGlobeI.Leave;
 
+              // Write to thread*.txt
               Append(FOwnFile);
               Write(FOwnFile, inttostr(toWrite) + ' ');
               Closefile(FOwnFile);
 
+              // Queue toWrites.
               SetLength(toWrites, Length(toWrites) + 1);
               toWrites[Length(toWrites) - 1].order := LFC;
               toWrites[Length(toWrites) - 1].prime := toWrite;
@@ -89,6 +98,7 @@ begin
           else CSGlobeI.Leave;
         end;
 
+      // Write to Result.txt from toWrites queue.
       for j:=0 to Length(toWrites) - 1 do
         begin
           if toWrites[j].order = LastWrote then
@@ -101,6 +111,7 @@ begin
               LastWrote := toWrites[j].order + 1;
               CSWrite.Leave;
 
+              // Dequeue toWrites.
               if Length(toWrites) > 1 then
                 begin
                   for k := 1 to Length(toWrites) - 1 do
@@ -123,7 +134,22 @@ begin
     begin
       try
         ReadLn(n);
-        Break;
+        if n > 0 then Break else Writeln('It is not an unsigned integer. Try again.');
+      except
+        Writeln('It is not an integer. Try again.');
+      end;
+    end;
+
+  Writeln('Please enter number of threads. The number must not be greater than 4.');
+  while True do
+    begin
+      try
+        ReadLn(ThreadsCount);
+        if  ThreadsCount <= 4 then
+          begin
+            if  ThreadsCount > 1 then  Break else Writeln('The number less than 1. Try again.');
+          end
+        else  Writeln('The number greater than 4. Try again.');
       except
         Writeln('It is not an unsigned integer. Try again.');
       end;
@@ -144,11 +170,12 @@ begin
   ReWrite(CommonFile);
   CSGlobeI := TCriticalSection.Create();
   CSWrite := TCriticalSection.Create();
-  ThreadsCount := 3;
   SetLength(WriteThreads, ThreadsCount);
   globI := 2;
   LastWrote := 1;
   foundCount := 0;
+
+  //Lounchinf threads
   for ii:=0 to ThreadsCount - 1 do
     begin
       WriteThreads[ii] := TPrimeWriter.Create(true);
@@ -156,6 +183,7 @@ begin
       WriteThreads[ii].Resume;
     end;
 
+  //Waiting for threads will be stopped
   for ii:=0 to ThreadsCount - 1 do
     begin
       WriteThreads[ii].WaitFor;
@@ -167,12 +195,7 @@ begin
 
   try
     WriteLn('To quit enter anything');
-    Quit := False;
-    while not Quit do
-      begin
-        ReadLn(S);
-        Quit := True;
-      end;
+    ReadLn(S);
   except
   end;
 end.
